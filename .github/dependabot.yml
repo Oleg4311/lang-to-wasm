@@ -14,3 +14,7 @@ updates:
     groups:
       npm:
         patterns: ["*"]
+    ignore:
+      # типы Node должны соответствовать версии Node в CI и в engines (24)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
