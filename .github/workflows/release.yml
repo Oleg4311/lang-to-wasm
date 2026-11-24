@@ -1,0 +1,44 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Версия в package.json должна совпадать с тегом
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm run typecheck && npm test
+      - name: Упаковка
+        run: |
+          npm run site
+          name="lang-to-wasm-${GITHUB_REF_NAME}"
+          mkdir -p "dist/$name"
+          cp -r src examples package.json tsconfig.json README.md LICENSE "dist/$name/"
+          cp -r site/js "dist/$name/browser"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          cp "dist/$name.tar.gz" /tmp/ && rm -rf dist/$name && ls -la dist
+      - run: (cd dist && sha256sum *.tar.gz > SHA256SUMS && cat SHA256SUMS)
+      - name: Подтверждение происхождения (provenance)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: dist/*.tar.gz
+      - name: Публикация релиза
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS
+          --title "lang-to-wasm $GITHUB_REF_NAME"
+          --notes "Архив с исходниками компилятора на TypeScript (запуск: node src/cli.ts run examples/fib.fox, нужен Node.js 24 или новее) и готовой браузерной сборкой в папке browser. Проверьте SHA-256 из SHA256SUMS и аттестацию: gh attestation verify <файл> --repo Oleg4311/lang-to-wasm. В npm пакет не публикуется. Демо: https://oleg4311.github.io/lang-to-wasm/"

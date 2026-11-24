@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "site/js",
+    "rootDir": "src",
+    "rewriteRelativeImportExtensions": true,
+    "allowImportingTsExtensions": false,
+    "declaration": false,
+    "types": []
+  },
+  "include": ["src/syntax.ts", "src/check.ts", "src/interp.ts", "src/opt.ts", "src/codegen.ts", "src/wasm.ts", "src/index.ts"]
+}

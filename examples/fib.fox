@@ -1,0 +1,26 @@
+// Числа Фибоначчи двумя способами: рекурсией и циклом.
+fn fib(n: int) -> int {
+  if n < 2 { return n; }
+  return fib(n - 1) + fib(n - 2);
+}
+
+fn fib_loop(n: int) -> int {
+  let a = 0;
+  let b = 1;
+  while n > 0 {
+    let t = a + b;
+    a = b;
+    b = t;
+    n = n - 1;
+  }
+  return a;
+}
+
+fn main() -> int {
+  let i = 0;
+  while i < 10 {
+    print(fib(i));
+    i = i + 1;
+  }
+  return fib_loop(50);
+}

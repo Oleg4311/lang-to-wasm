@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fox в WebAssembly</title>
+<meta name="description" content="Компилятор маленького языка в WebAssembly прямо в браузере: свой бинарный кодировщик и оптимизатор.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23c2410c'/%3E%3Cpath d='M8 22V10l8 6 8-6v12' fill='none' stroke='white' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1c1917; --muted: #57534e; --card: #ffffff; --border: #d6d3d1;
+  --accent: #c2410c; --accent-fg: #ffffff; --code-bg: #f5f5f4; --ok: #166534; --bad: #b91c1c; --focus: #1d4ed8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171412; --fg: #f5f5f4; --muted: #b9b4ad; --card: #211d1a; --border: #44403c;
+    --accent: #fb923c; --accent-fg: #1c1917; --code-bg: #2a2522; --ok: #4ade80; --bad: #f87171; --focus: #93c5fd;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #171412; --fg: #f5f5f4; --muted: #b9b4ad; --card: #211d1a; --border: #44403c;
+  --accent: #fb923c; --accent-fg: #1c1917; --code-bg: #2a2522; --ok: #4ade80; --bad: #f87171; --focus: #93c5fd;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 68rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+h1 { margin: 0 0 .25rem; font-size: 1.6rem; }
+h2 { font-size: 1.05rem; margin: 0 0 .5rem; }
+.lead { margin: 0 0 1.25rem; color: var(--muted); max-width: 46rem; }
+.grid { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+@media (min-width: 52rem) { .grid { grid-template-columns: 1fr 1fr; } }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: .6rem; padding: 1rem; min-width: 0; }
+label { display: block; font-weight: 600; margin-bottom: .35rem; }
+select, textarea, button { font: inherit; color: inherit; }
+select, textarea { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: .4rem; padding: .5rem; }
+textarea { min-height: 20rem; font: .9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical; tab-size: 2; }
+.row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: .75rem 0 0; }
+button { background: var(--accent); color: var(--accent-fg); border: 0; border-radius: .4rem; padding: .6rem 1rem; font-weight: 700; cursor: pointer; min-height: 2.75rem; }
+button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); font-weight: 600; }
+a.dl { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+pre { margin: 0; background: var(--code-bg); border-radius: .4rem; padding: .75rem; overflow: auto; font: .85rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 22rem; white-space: pre; }
+#status { font-weight: 700; margin: 0 0 .5rem; }
+#status.ok { color: var(--ok); } #status.bad { color: var(--bad); }
+.stats { color: var(--muted); font-size: .9rem; margin: .5rem 0 0; }
+.sr { position: absolute; left: -9999px; }
+footer { margin-top: 2rem; color: var(--muted); font-size: .9rem; }
+footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Fox → WebAssembly</h1>
+  <p class="lead">Маленький язык с целыми числами, булевыми значениями, функциями и циклами. Компилятор работает прямо здесь: он разбирает текст, проверяет типы, оптимизирует и сам записывает двоичный модуль WebAssembly — без библиотек. Затем браузер выполняет этот модуль.</p>
+
+  <div class="grid">
+    <section class="card" aria-labelledby="src-h">
+      <h2 id="src-h">Программа</h2>
+      <label for="example">Пример</label>
+      <select id="example"></select>
+      <label for="source" style="margin-top:.75rem">Исходный код</label>
+      <textarea id="source" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <div class="row">
+        <button id="go" type="button">Скомпилировать и выполнить</button>
+        <label style="display:flex;gap:.4rem;align-items:center;margin:0;font-weight:500"><input id="opt" type="checkbox" checked> оптимизировать</label>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="out-h">
+      <h2 id="out-h">Результат</h2>
+      <p id="status" role="status" aria-live="polite">Нажмите «Скомпилировать и выполнить».</p>
+      <pre id="output" aria-label="Вывод программы" tabindex="0"></pre>
+      <p class="stats" id="stats"></p>
+      <div class="row"><a class="dl" id="download" download="program.wasm" hidden>Скачать .wasm</a></div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:1rem" aria-labelledby="wat-h">
+    <h2 id="wat-h">Сгенерированные инструкции</h2>
+    <pre id="wat" aria-label="Инструкции WebAssembly" tabindex="0"></pre>
+  </section>
+
+  <footer>Исходники и тесты: <a href="https://github.com/Oleg4311/lang-to-wasm">github.com/Oleg4311/lang-to-wasm</a>. Результат каждой программы сверяется с отдельным интерпретатором на тысячах случайных программ.</footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
